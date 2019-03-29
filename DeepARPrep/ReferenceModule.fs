@@ -4,8 +4,8 @@ open System.IO
 open SimbaForex2
 open SimbaForex2.Models.OandaModel
 
-let access_token = "fb298328abcc279ecd6f98131c8abcf3-a308bc81ad8b28d14b6e594db4dda6df"
-let account_id = "001-001-895063-001"
+let access_token = "<YOUUR ACCESS TOKEN>"
+let account_id = "<YOUR ACCOUNT ID>"
 let url = "https://api-fxtrade.oanda.com"
 let access_tuple = Tuple.Create(url,account_id,access_token)
 let minute_data = @"C:\JonesOnie\CSV\MinuteData"
