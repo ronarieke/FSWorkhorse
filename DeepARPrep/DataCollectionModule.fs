@@ -1,5 +1,6 @@
 ﻿module DataCollectionModule
 open ReferenceModule
+open SharedMethodsModule
 open System
 open System.Text
 open System.IO

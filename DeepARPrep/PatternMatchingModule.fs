@@ -2,49 +2,43 @@
 open System
 open System.IO
 open ReferenceModule
+open SharedMethodsModule
 open StatisticsComputationModule
-
+let dir = new DirectoryInfo(minute_data)
+let avgs_dir = new DirectoryInfo(averages_data + @"\Backward")
+let for_avgs_dir = new DirectoryInfo(averages_data + @"\Forward")
+let corrs_dir = new DirectoryInfo(correlations_data + @"\Backward")
+let raw_files = [for fle in dir.GetFiles() do yield fle] 
+let opened_files = raw_files |> List.collect(fun (fle) -> [ReadAndParseFile(fle)])
+let raw_averages = [for fle in avgs_dir.GetFiles() do yield fle] 
+let opened_averages = raw_averages |> List.collect(fun (fle) -> [ReadAndParseFile(fle)])
+let raw_forwards = [for fle in for_avgs_dir.GetFiles() do yield fle]
+let opened_forwards = raw_forwards |> List.collect(fun (fle) -> [ReadAndParseFile(fle)])
+let raw_corrs = [for fle in corrs_dir.GetFiles() do yield fle]
+let opened_corrs = raw_corrs |> List.collect(fun (fle) -> [ReadAndParseFile(fle)])
 type PatternMatching(date:DateTime, info:List<string[]>) = 
     let mutable InterestingSets : List<DateTime*List<string[]>*string[]*string[]*string[]> = []
     let mutable InterestDecay : List<DateTime*float> = []
-    let RandGen(size) = 
-        let rand = System.Random()
-        let mutable ctr = 1.
-        let mutable index_set = [0]
-        while ctr < size do
-            let prev = int(ctr)
-            index_set <- prev::index_set
-            ctr <- (1. + 4./3. * float(rand.Next())) * ctr
-            if int(ctr) <= prev then 
-                ctr <- float(prev + 1)
-        index_set |> List.sort
+    
     let CorrelateCompare(corrRow1:List<string>, corrRow2:List<string>) = 
         let mutable foo1 = 0.
         let mutable foo2 = 0.
         1. / ([for x in [1..corrRow1.Length - 1] do yield (corrRow1.[x], corrRow2.[x]) ] |> List.where(fun (c1,c2) -> Double.TryParse(c1,&foo1) && Double.TryParse(c2,&foo2) && float(c1) <> 0. && float(c2) <> 0. && false = Double.IsNaN(float(c1)) && false = Double.IsNaN(float(c2))) |> List.collect(fun (c1,c2) -> [abs(float(c1)-float(c2))]) |> List.sum)
-    let ApplySort(date:DateTime,lstlst:List<string[]>,inner) = 
-        if inner then 
-            lstlst.[0]::(lstlst.[1..lstlst.Length - 1] |> List.sortByDescending(fun (lst:string[]) -> DateTime.Parse(lst.[0]) |> fun (chi) -> HourImportance / float(abs((chi - date).Hours)) + DayImportance / float(abs((chi - date).Days))))
-        else
-            lstlst.[0]::(lstlst.[1..lstlst.Length - 1] |> List.sortByDescending(fun (lst:string[]) -> DateTime.Parse(lst.[0]) |> fun (chi) -> MonthImportance / float(abs(chi.Month - date.Month)) + YearImportance / float(abs(chi.Year - date.Year))))
-
+    
     let mutable optimizations = []
     do
-        let dir = new DirectoryInfo(minute_data)
-        let avgs_dir = new DirectoryInfo(averages_data + @"\Backward")
-        let for_avgs_dir = new DirectoryInfo(deviations_data + @"\Forward")
-        let corrs_dir = new DirectoryInfo(correlations_data + @"\Backward")
+
 
         let hour = date.Hour
         let month = date.Month
         let year = date.Year
         let dayOfWeek = int(date.DayOfWeek)
         
-        let files = [for fle in dir.GetFiles() do yield fle] |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(ta.Month - tb.Month))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
-        let avgs = [for fle in avgs_dir.GetFiles() do yield fle] |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(ta.Month - tb.Month))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
-        let for_avgs = [for fle in for_avgs_dir.GetFiles() do yield fle] |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(ta.Month - tb.Month))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
-        let corrs = [for fle in corrs_dir.GetFiles() do yield fle] |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(ta.Month - tb.Month))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
-        let trained = [ for x in RandGen(float(files.Length - 1)) do yield [for y in RandGen(float(int(avgs.[x].Length) - 1)).Tail do yield ApplySort(date, ReadAndParseFile(avgs.[x]), true) |> fun avg -> (avg.[y], ApplySort(date,ReadAndParseFile(for_avgs.[x]), true).[y], ApplySort(date, ReadAndParseFile(corrs.[x]), true).[y],(ReadAndParseFile(files.[x]) |> fun (kay:List<string[]>) -> kay.[1..kay.Length - 1] |> List.findIndex(fun key -> key.[0] = avg.[y].[0]) |> fun ind -> kay.[ind - BackDataLength..ind]))]]
+        let files = raw_files |> List.where(fun fle -> [for fleX in avgs_dir.GetFiles() do yield fleX] |> List.exists(fun fle2 -> fle2.Name = fle.Name)) |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(AbsoluteDiff("Month", ta.Month - tb.Month)))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
+        let avgs = raw_averages |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(AbsoluteDiff("Month", ta.Month - tb.Month)))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
+        let for_avgs =  raw_forwards |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(AbsoluteDiff("Month", ta.Month - tb.Month)))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
+        let corrs =  raw_corrs |> List.sortBy(fun fle -> (((fle.Name |> fun f -> (DateTime(int(f.Split('.').[0].Split('_').[0]),int(f.Split('.').[0].Split('_').[1]),1), DateTime(date.Year,date.Month,1)) |> fun (ta,tb) ->  MonthImportance / float(1. + float(abs(AbsoluteDiff("Month", ta.Month - tb.Month)))) + YearImportance / float(1. + float(abs(ta.Year - tb.Year)))))))
+        let trained = [ for x in RandGen(float(files.Length - 1)) do yield [for y in RandGen(float(opened_forwards.[x].Length - 1)).Tail do yield ApplySort(date, opened_averages.[x], true) |> fun avg -> (avg.[y], ApplySort(date,opened_forwards.[x], true).[y], ApplySort(date, opened_corrs.[x], true).[y],(opened_files.[x] |> fun (kay:List<string[]>) -> kay.[1..kay.Length - 1] |> List.findIndex(fun key -> key.[0] = avg.[y].[0]) |> fun ind -> kay.[ind - BackDataLength..ind]))]]
         let single_exchanges = "Exchanges"::exchanges
         let header = "CorrelationPairs"::([for ex in single_exchanges.Tail do yield [ for ex2 in single_exchanges.Tail do yield ex+"&"+ex2]] |> List.concat)
         
@@ -89,7 +83,8 @@ type PatternMatching(date:DateTime, info:List<string[]>) =
 
         // with the sorting in place, we may compute the optimization and logistically regress the values based on significance of match on correlation values
         let optimization(f0:float,p0:float,p1:float,n:int) = 
-            (Math.Log(float(n) + 2.) * Math.Sqrt(Math.Pow(f0-p0,2.)), p1 / (Math.Log(float(n) + 2.) * Math.Sqrt(Math.Pow(f0-p0,2.))))
+            let opti = (p1 / (Math.Log(float(n) + 2.) * Math.Sqrt(epsilon + Math.Pow(f0-p0,2.))), 1. / Math.Log(float(n) + 2.) * Math.Sqrt(epsilon + Math.Pow(f0-p0,2.)))
+            opti
         let InstrumentFactor(exch:string) = 
             (complete_data |> List.find(fun (exc,dat,avg,dev,corrLst) -> exc = exch) |> fun (e,da,av,de,co) -> av)
         let unStackedOptimizations = [for innerArr in Ordered_Complete_Data do yield [ for (logInd, iiLst) in innerArr do yield ([for (exch,(exch2,avg,forward,corr),corrInd) in iiLst do yield (exch,(optimization(InstrumentFactor(exch), avg,forward,logInd)))])]] 

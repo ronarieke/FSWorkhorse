@@ -2,12 +2,17 @@
 open System
 open System.IO
 open ReferenceModule
-open System.Runtime.InteropServices
-let average_delta(lst:List<DateTime*float>) = 
+open SharedMethodsModule
+let average_delta(lstX:List<DateTime*float>) = 
+    let lst = lstX |> List.where(fun (dte,va) -> va <> 0.)
     if lst.Length < 2 then 
         0.
     else
-        ([for x in [0..lst.Length - 2] do yield (((snd lst.[x+1]) - (snd lst.[x])) / (snd lst.[x]))] |> List.sum) / float(lst.Length - 1)
+        let foo = ([for x in [0..lst.Length - 2] do yield (((snd lst.[x+1]) - (snd lst.[x])) / (snd lst.[x]))] |> List.sum) / float(lst.Length - 1)
+        if Double.IsInfinity(foo) then 
+            Console.WriteLine("FOO")
+            Console.ReadLine() |> ignore
+        foo
 let deviation_delta(lst:List<DateTime*float>,average:float) = 
     if lst.Length < 2 then 
         0.
@@ -76,10 +81,10 @@ type DeviationsComputation(date:DateTime) =
     let exchanges = whole_file.[0]
     let averages_file = ReadAndParseFile(averages)
     let forward_averages_file = ReadAndParseFile(forward_averages)
-    let mutable ctr = 1 + BackDataLength
+    let mutable ctr = 1
     do
         while ContinueIteration(ctr,whole_file.Length) do
-            let averages_row = [for st in (averages_file.[1..averages_file.Length - 1] |> List.find(fun row -> row.[0] = whole_file.[ctr].[0])) do yield st]
+            let averages_row = [for st in (averages_file.[1..averages_file.Length - 1] |> List.find(fun row -> row.[0] = whole_file.[ctr + BackDataLength].[0])) do yield st]
             let deviations = [for x in [1..exchanges.Length-1] do yield [for infette in whole_file.[ctr..System.Math.Min(ctr + BackDataLength, whole_file.Length - 1)] do yield (Convert.ToDateTime(infette.[0]),float(infette.[x]))] |> List.where(fun (dt,inf) -> inf <> 0.) |> fun (lst) -> deviation_delta(lst, float(averages_row.[x]))]
             let dev_fles = [for fle in (new DirectoryInfo(deviations_data + @"\Backward")).GetFiles() do yield fle]
             if (dev_fles |> List.exists(fun fle -> fle.Name = date.Year.ToString() + "_" + date.Month.ToString() + ".csv")) then 
@@ -87,7 +92,7 @@ type DeviationsComputation(date:DateTime) =
             else
                 File.WriteAllText(deviations_data + String.Format(@"\Backward\{0}",FileName(date)),String.Join(",",exchanges))
                 File.AppendAllText(deviations_data + String.Format(@"\Backward\{0}",FileName(date)),"\n" + whole_file.[System.Math.Min(ctr + BackDataLength, whole_file.Length - 1)].[0]+","+String.Join(",",deviations))
-            let fw_averages_row = [for st in (forward_averages_file.[1..forward_averages_file.Length - 1] |> List.find(fun row -> row.[0] = whole_file.[ctr].[0])) do yield st]
+            let fw_averages_row = [for st in (forward_averages_file.[1..forward_averages_file.Length - 1] |> List.find(fun row -> row.[0] = whole_file.[ctr + BackDataLength].[0])) do yield st]
             let forward_deviations = [for x in [1..exchanges.Length-1] do yield [for infette in whole_file.[ctr..System.Math.Min(ctr + BackDataLength, whole_file.Length - 1)] do yield (Convert.ToDateTime(infette.[0]),float(infette.[x]))] |> List.where(fun (dt,inf) -> inf <> 0.) |> fun (lst) -> deviation_delta(lst, float(fw_averages_row.[x]))]
             let forward_dev_fles = [for fle in (new DirectoryInfo(deviations_data + @"\Forward")).GetFiles() do yield fle]
             if (forward_dev_fles |> List.exists(fun fle -> fle.Name = FileName(date))) then 
@@ -108,7 +113,7 @@ type CorrelationsComputation(date:DateTime) =
     let forward_averages = ReadAndParseFile(forward_average_file)
     let deviations = ReadAndParseFile(deviation_file)
     let forward_deviations = ReadAndParseFile(forward_deviation_file)
-    let mutable ctr = 1 + BackDataLength
+    let mutable ctr = 1
     let Elongate(lstlst:List<string*List<string*float>>) = 
         String.Join(",",[|for (str,lst) in lstlst do yield String.Join(",",[|for (stri,value) in lst do yield value.ToString()|])|])
     let Square(exchs:string[]) = 
